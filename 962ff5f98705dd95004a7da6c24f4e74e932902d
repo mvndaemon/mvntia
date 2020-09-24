@@ -1,0 +1,9 @@
+[
+  {
+    "test": "org.jboss.fuse.tia.sample.FirstTest",
+    "method": "simpleTest",
+    "classes": [
+      "org.jboss.fuse.tia.sample.Calculator"
+    ]
+  }
+]
