@@ -5,5 +5,12 @@
     "classes": [
       "org.jboss.fuse.tia.sample.Calculator"
     ]
+  },
+  {
+    "test": "org.jboss.fuse.tia.sample.FirstTest",
+    "method": "myFirstTest",
+    "classes": [
+      "org.jboss.fuse.tia.sample.Calculator"
+    ]
   }
 ]
