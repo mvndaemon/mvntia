@@ -13,6 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Copyright (c) 2009, 2020 Mountainminds GmbH & Co. KG and Contributors
+ *
+ * The JaCoCo Java Code Coverage Library and all included documentation is
+ * made available by Mountainminds GmbH & Co. KG, Munich. Except indicated
+ * below, the Content is provided to you under the terms and conditions of
+ * the Eclipse Public License Version 2.0 ("EPL"). A copy of the EPL is
+ * available at https://www.eclipse.org/legal/epl-2.0/.
+ *
+ * Please visit http://www.jacoco.org/jacoco/trunk/doc/license.html for the
+ * complete license information including third party licenses and trademarks.
+ */
 package org.jboss.fuse.tia.agent;
 
 import java.io.File;
@@ -32,8 +44,7 @@ public class AgentOptions {
 
     private static final Collection<String> VALID_OPTIONS = Arrays.asList(PORT);
 
-    private static final Pattern OPTION_SPLIT = Pattern
-            .compile(",(?=[a-zA-Z0-9_\\-]+=)");
+    private static final Pattern OPTION_SPLIT = Pattern.compile(",(?=[a-zA-Z0-9_\\-]+=)");
 
     private final Map<String, String> options;
 
@@ -47,8 +58,7 @@ public class AgentOptions {
     /**
      * New instance parsed from the given option string.
      *
-     * @param optionstr
-     *            string to parse or <code>null</code>
+     * @param optionstr string to parse or <code>null</code>
      */
     public AgentOptions(final String optionstr) {
         this();
@@ -79,8 +89,7 @@ public class AgentOptions {
      * Sets the port on which to listen to when output is <code>tcpserver</code>
      * or the port to connect to when output is <code>tcpclient</code>
      *
-     * @param port
-     *            port to listen on or connect to
+     * @param port port to listen on or connect to
      */
     public AgentOptions port(final int port) {
         setOption(PORT, port);
@@ -93,11 +102,9 @@ public class AgentOptions {
      * JAR file is already specified this parameter is removed from the existing
      * command line.
      *
-     * @param arguments
-     *            existing command line arguments or <code>null</code>
-     * @param agentJarFile
-     *            location of the JaCoCo Agent Jar
-     * @return VM command line arguments prepended with configured JaCoCo agent
+     * @param arguments existing command line arguments or <code>null</code>
+     * @param agentJarFile location of the Agent Jar
+     * @return VM command line arguments prepended with configured agent
      */
     public String prependVMArguments(final String arguments,
                                      final File agentJarFile) {
@@ -113,8 +120,7 @@ public class AgentOptions {
      * Generate required JVM argument based on current configuration and
      * supplied agent jar location.
      *
-     * @param agentJarFile
-     *            location of the JaCoCo Agent Jar
+     * @param agentJarFile location of the agent Jar
      * @return Argument to pass to create new VM with coverage enabled
      */
     public String getVMArgument(final File agentJarFile) {
