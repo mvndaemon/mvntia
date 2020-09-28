@@ -97,12 +97,13 @@ public class PrepareAgent extends AbstractMojo {
                 throw new RuntimeException("It is not a Git repository");
             }
 
+            String id = project.getGroupId() + ":" + project.getArtifactId();
             Set<String> reactorDeps = project.getArtifacts().stream()
                     .map(a -> a.getFile().toString())
                     .filter(f -> f.startsWith(executionDir))
                     .collect(Collectors.toSet());
 
-            Server server = new Server(new GitClient(executionDir, reactorDeps));
+            Server server = new Server(new GitClient(id, executionDir, reactorDeps));
 
             final String name = propertyName;
             final Properties projectProperties = project.getProperties();

@@ -27,6 +27,11 @@ import java.util.stream.Collectors;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.jboss.fuse.tia.agent.Client;
 import org.jboss.fuse.tia.reports.GitStorage;
 import org.jboss.fuse.tia.reports.ReportStatus;
@@ -38,6 +43,7 @@ public class GitClient implements Client {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GitClient.class);
 
+    String identifier;
     Gson gson;
     GitStorage storage;
     CountDownLatch initialized = new CountDownLatch(1);
@@ -47,7 +53,8 @@ public class GitClient implements Client {
     Map<String, TestReport> reports;
     Map<String, TestReport> disabledTests;
 
-    public GitClient(String executionDir, Set<String> deps) throws IOException {
+    public GitClient(String id, String executionDir, Set<String> deps) throws IOException {
+        identifier = id;
         gson = new GsonBuilder().create();
         storage = new GitStorage(executionDir);
         reactorDeps = deps;
@@ -69,7 +76,12 @@ public class GitClient implements Client {
             }
             // Load existing test reports
             String notes = storage.getNotes();
-            TestReport[] loaded = gson.fromJson(notes, TestReport[].class);
+            JsonElement element = JsonParser.parseString(notes);
+            if (element instanceof JsonNull) {
+                element = new JsonObject();
+            }
+            JsonElement jsonReports = element.getAsJsonObject().get(identifier);
+            TestReport[] loaded = gson.fromJson(jsonReports, TestReport[].class);
             if (loaded != null) {
                 for (TestReport report : loaded) {
                     reports.put(report.getTestMethodId(), report);
@@ -128,8 +140,17 @@ public class GitClient implements Client {
         try {
             initialized.await();
             if (status == ReportStatus.CLEAN) {
+                // Read notes
+                String notes = storage.getNotes();
+                JsonElement element = JsonParser.parseString(notes);
+                if (element instanceof JsonNull) {
+                    element = new JsonObject();
+                }
+                // Modify the current tests reports
+                element.getAsJsonObject().add(identifier, gson.toJsonTree(reports.values()));
+                String newNotes = gson.toJson(element);
                 try (Writer writer = storage.buildWriter()) {
-                    writer.write(gson.toJson(reports.values()));
+                    writer.write(newNotes);
                 }
             }
         } catch (Exception e) {
