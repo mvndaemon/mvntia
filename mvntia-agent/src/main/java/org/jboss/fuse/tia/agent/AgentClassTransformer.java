@@ -133,7 +133,8 @@ public class AgentClassTransformer implements ClassFileTransformer {
                 .orElse("rt.jar");
         if (className != null && (reactorDeps.contains(jar) || jar.endsWith("/"))) {
             String normalizedName = normalizeName(className);
-            if (!normalizedName.contains("$MockitoMock$")) {
+            if (!normalizedName.contains("$MockitoMock$")
+                    && !normalizedName.contains("$FastClassBySpringCGLIB$")) {
                 return instrumentClass(normalizedName, classfileBuffer);
             }
         }
