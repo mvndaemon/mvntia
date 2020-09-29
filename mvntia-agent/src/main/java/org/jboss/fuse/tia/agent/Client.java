@@ -15,17 +15,16 @@
  */
 package org.jboss.fuse.tia.agent;
 
+import java.util.List;
 import java.util.Set;
 
 public interface Client {
 
-    Set<String> reactorDeps();
+    Set<String> disabledTests(String project);
 
-    Set<String> disabledTests();
+    void addReport(String project, String test, List<String> classes);
 
-    void addReport(String test, String method, Set<String> classes);
-
-    void writeReports();
+    void writeReport(String project);
 
     void log(String level, String message);
 

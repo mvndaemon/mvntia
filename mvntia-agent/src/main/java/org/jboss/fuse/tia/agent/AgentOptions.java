@@ -42,7 +42,11 @@ public class AgentOptions {
 
     public static final String PORT = "port";
 
-    private static final Collection<String> VALID_OPTIONS = Arrays.asList(PORT);
+    public static final String PROJECT = "project";
+
+    public static final String REACTOR_DEPS = "reactorDeps";
+
+    private static final Collection<String> VALID_OPTIONS = Arrays.asList(PORT, PROJECT, REACTOR_DEPS);
 
     private static final Pattern OPTION_SPLIT = Pattern.compile(",(?=[a-zA-Z0-9_\\-]+=)");
 
@@ -85,6 +89,14 @@ public class AgentOptions {
         return getOption(PORT, 0);
     }
 
+    public String getProject() {
+        return getOption(PROJECT, "");
+    }
+
+    public String getReactorDeps() {
+        return getOption(REACTOR_DEPS, "");
+    }
+
     /**
      * Sets the port on which to listen to when output is <code>tcpserver</code>
      * or the port to connect to when output is <code>tcpclient</code>
@@ -93,6 +105,16 @@ public class AgentOptions {
      */
     public AgentOptions port(final int port) {
         setOption(PORT, port);
+        return this;
+    }
+
+    public AgentOptions project(final String project) {
+        setOption(PROJECT, project);
+        return this;
+    }
+
+    public AgentOptions reactorDeps(final String reactorDeps) {
+        setOption(REACTOR_DEPS, reactorDeps);
         return this;
     }
 
@@ -150,6 +172,11 @@ public class AgentOptions {
     private int getOption(final String key, final int defaultValue) {
         final String value = options.get(key);
         return value == null ? defaultValue : Integer.parseInt(value);
+    }
+
+    private String getOption(final String key, final String defaultValue) {
+        final String value = options.get(key);
+        return value == null ? defaultValue : value;
     }
 
 }

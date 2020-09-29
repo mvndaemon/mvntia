@@ -16,6 +16,8 @@
 package org.jboss.fuse.tia.maven;
 
 import java.io.File;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -45,6 +47,8 @@ public class PrepareAgent extends AbstractMojo {
      */
     static final String SUREFIRE_ARG_LINE = "argLine";
 
+    static final Map<String, Server> servers = new HashMap<>();
+
     /**
      * Maven project.
      */
@@ -69,6 +73,9 @@ public class PrepareAgent extends AbstractMojo {
     @Parameter(property = "plugin.artifactMap", required = true, readonly = true)
     Map<String, Artifact> pluginArtifactMap;
 
+    @Parameter(defaultValue = "${project.groupId}:*")
+    Collection<String> artifacts;
+
     public final void execute() throws MojoExecutionException, MojoFailureException {
         if (skip) {
             getLog().info("Skipping mvntia execution because property mvntia.skip is set.");
@@ -79,11 +86,6 @@ public class PrepareAgent extends AbstractMojo {
 
     protected void executeMojo() throws MojoExecutionException, MojoFailureException {
         try {
-            if (project.getPackaging().equals("pom")) {
-                getLog().debug("Ignoring pom packaging");
-                return;
-            }
-
             String executionDir;
             File parent = new File(".").getAbsoluteFile();
             boolean isGit = new File(parent, ".git").exists();
@@ -97,19 +99,27 @@ public class PrepareAgent extends AbstractMojo {
                 throw new RuntimeException("It is not a Git repository");
             }
 
-            String id = project.getGroupId() + ":" + project.getArtifactId();
+            Server server = servers.get(executionDir);
+            if (server == null) {
+                getLog().info("Creating mvntia server for git repository " + executionDir);
+                server = new Server(new GitClient(executionDir, getLog()));
+                servers.put(executionDir, server);
+            }
+
+            Collection<ArtifactId> artifactIds = ArtifactId.toIds(artifacts);
             Set<String> reactorDeps = project.getArtifacts().stream()
+                    .filter(a -> ArtifactId.matches(artifactIds, a))
                     .map(a -> a.getFile().toString())
-                    .filter(f -> f.startsWith(executionDir))
                     .collect(Collectors.toSet());
 
-            Server server = new Server(new GitClient(id, executionDir, reactorDeps));
-
+            String id = project.getGroupId() + ":" + project.getArtifactId();
             final String name = propertyName;
             final Properties projectProperties = project.getProperties();
             final String oldValue = projectProperties.getProperty(name);
             final String newValue = new AgentOptions()
                     .port(server.getPort())
+                    .project(id)
+                    .reactorDeps(String.join(";", reactorDeps))
                     .prependVMArguments(oldValue, getAgentJarFile());
             getLog().info(name + " set to " + newValue);
             projectProperties.setProperty(name, newValue);

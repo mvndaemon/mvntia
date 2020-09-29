@@ -24,7 +24,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
@@ -84,31 +84,26 @@ public class Server implements Closeable {
                     } else {
                         String reqStr = request.get("request").getAsString();
                         switch (reqStr) {
-                            case "reactorDeps": {
-                                JsonArray result = new JsonArray();
-                                client.reactorDeps().forEach(result::add);
-                                response = new JsonObject();
-                                response.add("result", result);
-                                break;
-                            }
                             case "disabledTests": {
                                 JsonArray result = new JsonArray();
-                                client.disabledTests().forEach(result::add);
+                                client.disabledTests(
+                                        request.get("project").getAsString()
+                                ).forEach(result::add);
                                 response = new JsonObject();
                                 response.add("result", result);
                                 break;
                             }
                             case "addReport":
                                 client.addReport(
+                                        request.get("project").getAsString(),
                                         request.get("test").getAsString(),
-                                        request.get("method").getAsString(),
-                                        Set.of(gson.fromJson(request.get("classes"), String[].class))
+                                        List.of(gson.fromJson(request.get("classes"), String[].class))
                                 );
                                 response = new JsonObject();
                                 response.addProperty("result", "ok");
                                 break;
-                            case "writeReports":
-                                client.writeReports();
+                            case "writeReport":
+                                client.writeReport(request.get("project").getAsString());
                                 response = new JsonObject();
                                 response.addProperty("result", "ok");
                                 break;

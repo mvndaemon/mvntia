@@ -16,22 +16,56 @@
 package org.jboss.fuse.tia.agent;
 
 import java.lang.instrument.Instrumentation;
+import java.util.List;
 import java.util.Set;
 
 public class Agent {
 
     private static Client client;
 
+    private static String project;
+
+    private static String reactorDeps;
+
     public static Client getClient() {
         return client;
+    }
+
+    public static String getProject() {
+        return project;
+    }
+
+    public static String getReactorDeps() {
+        return reactorDeps;
+    }
+
+    static {
+        client = new Client() {
+            @Override
+            public Set<String> disabledTests(String project) {
+                return Set.of();
+            }
+            @Override
+            public void addReport(String project, String test, List<String> classes) {
+            }
+            @Override
+            public void writeReport(String project) {
+            }
+            @Override
+            public void log(String level, String message) {
+            }
+        };
+        project = "";
     }
 
     public static void premain(String args, Instrumentation instrumentation) {
         try {
             AgentOptions options = new AgentOptions(args);
             client = new HttpClient(options.getPort());
-            Set<String> reactorDeps = client.reactorDeps();
-            instrumentation.addTransformer(new AgentClassTransformer(reactorDeps));
+            project = options.getProject();
+            reactorDeps = options.getReactorDeps();
+            Set<String> deps = reactorDeps.isBlank() ? Set.of() : Set.of(reactorDeps.split(";"));
+            instrumentation.addTransformer(new AgentClassTransformer(deps));
         } catch (Throwable t) {
             t.printStackTrace();
             throw t;

@@ -15,30 +15,30 @@
  */
 package org.jboss.fuse.tia.junit5;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Level;
-import java.util.logging.LogManager;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import org.jboss.fuse.tia.agent.Agent;
 import org.jboss.fuse.tia.agent.AgentClassTransformer;
 import org.junit.platform.engine.TestExecutionResult;
+import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.support.descriptor.ClassSource;
-import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 
 public class TiaTestListener implements TestExecutionListener {
 
-    private static final Logger LOGGER = LogManager.getLogManager().getLogger(TiaTestListener.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(TiaTestListener.class.getName());
 
     private static final String STOP = "#-#-STOP-#-#";
 
-    private TestPlan plan;
     private final BlockingDeque<Report> reports = new LinkedBlockingDeque<>();
     private final Thread runner;
 
@@ -48,57 +48,47 @@ public class TiaTestListener implements TestExecutionListener {
     }
 
     @Override
-    public void testPlanExecutionStarted(TestPlan testPlan) {
-        this.plan = testPlan;
-    }
-
-    private String getClassName(TestIdentifier testIdentifier) {
-        return plan.getParent(testIdentifier)
-                .flatMap(TestIdentifier::getSource)
-                .filter(ClassSource.class::isInstance)
-                .map(ClassSource.class::cast)
-                .map(ClassSource::getClassName)
-                .orElseThrow(() -> new IllegalStateException("Invalid test class name"));
-    }
-
-    private String getMethodName(TestIdentifier testIdentifier) {
-        return testIdentifier.getSource()
-                .filter(MethodSource.class::isInstance)
-                .map(MethodSource.class::cast)
-                .map(MethodSource::getMethodName)
-                .orElseThrow(() -> new IllegalStateException("Invalid test method name"));
-    }
-
-    @Override
     public void executionStarted(TestIdentifier testIdentifier) {
-        if (testIdentifier.isTest()) {
-            AgentClassTransformer.cleanUp();
+        TestSource source = testIdentifier.getSource().orElse(null);
+        if (source instanceof ClassSource) {
+            Agent.getClient().log("debug", "executionStarted: " + testIdentifier);
         }
     }
 
     @Override
     public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
-        if (testIdentifier.isTest()) {
+        TestSource source = testIdentifier.getSource().orElse(null);
+        if (source instanceof ClassSource) {
             Set<String> classes = AgentClassTransformer.getReferencedClasses();
-            if (!classes.isEmpty()) {
-                addReport(getClassName(testIdentifier), getMethodName(testIdentifier), classes);
-            }
+            String test = ((ClassSource) source).getClassName();
+            List<String> names = classes.stream()
+                    .map(s -> {
+                        int i = s.indexOf('$');
+                        return i > 0 ? s.substring(0, i) : s;
+                    })
+                    .filter(s -> !test.equals(s))
+                    .sorted()
+                    .distinct()
+                    .collect(Collectors.toList());
+            addReport(test, names);
+            AgentClassTransformer.cleanUp();
+            Agent.getClient().log("debug", "executionFinished: referenced classes: " + names);
         }
     }
 
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
-        addReport(STOP, STOP, Set.of());
+        addReport(STOP, List.of());
         try {
             runner.join();
         } catch (InterruptedException e) {
             LOGGER.log(Level.SEVERE, "Error waiting for runner thread", e);
         }
-        Agent.getClient().writeReports();
+        Agent.getClient().writeReport(Agent.getProject());
     }
 
-    private void addReport(String test, String method, Set<String> classes) {
-        reports.add(new Report(test, method, classes));
+    private void addReport(String test, List<String> classes) {
+        reports.add(new Report(test, classes));
     }
 
     private void sendReports() {
@@ -108,7 +98,7 @@ public class TiaTestListener implements TestExecutionListener {
                 if (Objects.equals(STOP, report.test)) {
                     break;
                 }
-                Agent.getClient().addReport(report.test, report.method, report.classes);
+                Agent.getClient().addReport(Agent.getProject(), report.test, report.classes);
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error sending reports", e);
@@ -118,12 +108,10 @@ public class TiaTestListener implements TestExecutionListener {
 
     static class Report {
         final String test;
-        final String method;
-        final Set<String> classes;
+        final List<String> classes;
 
-        public Report(String test, String method, Set<String> classes) {
+        public Report(String test, List<String> classes) {
             this.test = test;
-            this.method = method;
             this.classes = classes;
         }
     }

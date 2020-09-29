@@ -34,7 +34,7 @@ public class TiaExtension implements ExecutionCondition {
         if (disabledTests == null) {
             synchronized (this) {
                 if (disabledTests == null) {
-                    disabledTests = Agent.getClient().disabledTests();
+                    disabledTests = Agent.getClient().disabledTests(Agent.getProject());
                 }
             }
         }

@@ -23,6 +23,7 @@ import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Set;
 
 import com.google.gson.Gson;
@@ -41,27 +42,11 @@ public class HttpClient implements Client {
     }
 
     @Override
-    public Set<String> reactorDeps() {
-        try {
-            JsonObject req = new JsonObject();
-            req.addProperty("request", "reactorDeps");
-            JsonObject rep = request(req);
-            if (rep.has("error")) {
-                throw new IOException(rep.get("error").toString());
-            }
-            String[] tests = gson.fromJson(rep.get("result"), String[].class);
-            return Set.of(tests);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    @Override
-    public Set<String> disabledTests() {
+    public Set<String> disabledTests(String project) {
         try {
             JsonObject req = new JsonObject();
             req.addProperty("request", "disabledTests");
+            req.addProperty("project", project);
             JsonObject rep = request(req);
             if (rep.has("error")) {
                 throw new IOException(rep.get("error").toString());
@@ -75,12 +60,12 @@ public class HttpClient implements Client {
     }
 
     @Override
-    public void addReport(String test, String method, Set<String> classes) {
+    public void addReport(String project, String test, List<String> classes) {
         try {
             JsonObject req = new JsonObject();
             req.addProperty("request", "addReport");
+            req.addProperty("project", project);
             req.addProperty("test", test);
-            req.addProperty("method", method);
             req.add("classes", gson.toJsonTree(classes));
             JsonObject rep = request(req);
             if (rep.has("error")) {
@@ -92,10 +77,11 @@ public class HttpClient implements Client {
     }
 
     @Override
-    public void writeReports() {
+    public void writeReport(String project) {
         try {
             JsonObject req = new JsonObject();
-            req.addProperty("request", "writeReports");
+            req.addProperty("request", "writeReport");
+            req.addProperty("project", project);
             JsonObject rep = request(req);
             if (rep.has("error")) {
                 throw new IOException(rep.get("error").toString());

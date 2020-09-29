@@ -23,7 +23,6 @@ import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
-import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
 import javassist.CannotCompileException;
@@ -41,7 +40,7 @@ import javassist.NotFoundException;
  */
 public class AgentClassTransformer implements ClassFileTransformer {
 
-    private static final Logger LOGGER = LogManager.getLogManager().getLogger(AgentClassTransformer.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(AgentClassTransformer.class.getName());
 
     /**
      * Structure to store the list of referenced classes
@@ -60,7 +59,7 @@ public class AgentClassTransformer implements ClassFileTransformer {
      * Cleans the list of referenced classes. It is needed for clean the list of
      * referenced classes between tests.
      */
-    public static void cleanUp() {
+    public static synchronized void cleanUp() {
         referencedClasses = new LinkedHashSet<>();
     }
 
@@ -69,8 +68,16 @@ public class AgentClassTransformer implements ClassFileTransformer {
      *
      * @param name full class name to store
      */
-    public static void add(String name) {
+    public static synchronized void add(String name) {
         referencedClasses.add(name);
+    }
+
+    /**
+     * @return the list of referenced classes during a program/test execution, which has been
+     * resolved by instrumentation techniques
+     */
+    public static synchronized Set<String> getReferencedClasses() {
+        return referencedClasses;
     }
 
     static byte[] instrumentClassWithStaticStmt(String className, String instrumentationInstruction)
@@ -126,7 +133,9 @@ public class AgentClassTransformer implements ClassFileTransformer {
                 .orElse("rt.jar");
         if (className != null && (reactorDeps.contains(jar) || jar.endsWith("/"))) {
             String normalizedName = normalizeName(className);
-            return instrumentClass(normalizedName, classfileBuffer);
+            if (!normalizedName.contains("$MockitoMock$")) {
+                return instrumentClass(normalizedName, classfileBuffer);
+            }
         }
 
         return classfileBuffer;
@@ -159,11 +168,4 @@ public class AgentClassTransformer implements ClassFileTransformer {
         return aux;
     }
 
-    /**
-     * @return the list of referenced classes during a program/test execution, which has been
-     * resolved by instrumentation techniques
-     */
-    public static Set<String> getReferencedClasses() {
-        return referencedClasses;
-    }
 }
