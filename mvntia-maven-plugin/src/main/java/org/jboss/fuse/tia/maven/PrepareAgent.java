@@ -35,7 +35,7 @@ import org.apache.maven.project.MavenProject;
 import org.jboss.fuse.tia.agent.AgentOptions;
 
 @Mojo(name = "prepare-agent", defaultPhase = LifecyclePhase.INITIALIZE,
-        requiresDependencyResolution = ResolutionScope.RUNTIME, threadSafe = true)
+        requiresDependencyResolution = ResolutionScope.TEST, threadSafe = true)
 public class PrepareAgent extends AbstractMojo {
 
     /**
@@ -60,6 +60,12 @@ public class PrepareAgent extends AbstractMojo {
      */
     @Parameter(property = "mvntia.skip", defaultValue = "false")
     boolean skip;
+
+    /**
+     * Flag used to suppress execution.
+     */
+    @Parameter(property = "mvntia.debug", defaultValue = "false")
+    boolean debug;
 
     /**
      * Property name to set
@@ -120,8 +126,9 @@ public class PrepareAgent extends AbstractMojo {
                     .port(server.getPort())
                     .project(id)
                     .reactorDeps(String.join(";", reactorDeps))
-                    .prependVMArguments(oldValue, getAgentJarFile());
-            getLog().info(name + " set to " + newValue);
+                    .prependVMArguments(oldValue, getAgentJarFile(), debug);
+            getLog().info("Preparing surefire to run with mvntia");
+            getLog().debug(name + " set to " + newValue);
             projectProperties.setProperty(name, newValue);
         } catch (Exception e) {
             throw new MojoFailureException("Error setting up agent", e);

@@ -55,6 +55,16 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <relocations>
+                                <relocation>
+                                    <pattern>javassist</pattern>
+                                    <shadedPattern>mvntia.shaded.javassist</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.google.gson</pattern>
+                                    <shadedPattern>mvntia.shaded.gson</shadedPattern>
+                                </relocation>
+                            </relocations>
                             <filters>
                                 <!-- in case we do not have a clean state,
                                      we need to exclude already shaded files

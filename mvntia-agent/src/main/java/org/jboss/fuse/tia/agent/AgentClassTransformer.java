@@ -16,6 +16,8 @@
 package org.jboss.fuse.tia.agent;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
@@ -108,38 +110,29 @@ public class AgentClassTransformer implements ClassFileTransformer {
         return clazz.toBytecode();
     }
 
-    /**
-     * Resolves if an specific class belongs to a third party library or to the
-     * local project
-     *
-     * @param protectionDomain place where the class belongs to
-     * @return if belongs to a third party library
-     */
-    protected boolean belongsToAJarFile(ProtectionDomain protectionDomain) {
-        return Optional.ofNullable(protectionDomain)
-                .map(ProtectionDomain::getCodeSource)
-                .map(source -> source.getLocation().getPath().endsWith(".jar"))
-                .orElse(false);
-    }
-
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer)
             throws IllegalClassFormatException {
 
-        String jar = Optional.ofNullable(protectionDomain)
+        String location = Optional.ofNullable(protectionDomain)
                 .map(ProtectionDomain::getCodeSource)
                 .map(source -> source.getLocation().getPath())
-                .orElse("rt.jar");
-        if (className != null && (reactorDeps.contains(jar) || jar.endsWith("/"))) {
+                .orElse(null);
+        if (className != null && location != null && (reactorDeps.contains(location) || location.endsWith("/"))) {
             String normalizedName = normalizeName(className);
-            if (!normalizedName.contains("$MockitoMock$")
-                    && !normalizedName.contains("$FastClassBySpringCGLIB$")) {
+            if (!isGeneratedClass(normalizedName)) {
                 return instrumentClass(normalizedName, classfileBuffer);
             }
         }
 
         return classfileBuffer;
+    }
+
+    public boolean isGeneratedClass(String name) {
+        return name.contains("$MockitoMock$")
+                || name.contains("$FastClassBySpringCGLIB$")
+                || name.contains("$Proxy$");
     }
 
     /**
@@ -156,7 +149,13 @@ public class AgentClassTransformer implements ClassFileTransformer {
                     AgentClassTransformer.class.getName()
                             + ".add(\"" + name + "\");");
         } catch (Throwable e) {
-            LOGGER.log(Level.SEVERE, "Error instrumenting " + name, e);
+            String level = /*e instanceof NotFoundException ? "debug" :*/ "error";
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            e.printStackTrace(pw);
+            pw.close();
+            String stackTrace = sw.toString();
+            Agent.getClient().log(level, "Error instrumenting " + name + "\n" + stackTrace);
         }
         return classfileBuffer;
     }

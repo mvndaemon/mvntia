@@ -129,12 +129,16 @@ public class AgentOptions {
      * @return VM command line arguments prepended with configured agent
      */
     public String prependVMArguments(final String arguments,
-                                     final File agentJarFile) {
+                                     final File agentJarFile,
+                                     final boolean debug) {
         final List<String> args = CommandLineSupport.split(arguments);
         final String plainAgent = String.format("-javaagent:%s", agentJarFile);
         args.removeIf(s -> s.startsWith(plainAgent));
         args.add(0, getVMArgument(agentJarFile));
         args.add(1, "-Djunit.jupiter.extensions.autodetection.enabled=true");
+        if (debug) {
+            args.add(2, "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005");
+        }
         return CommandLineSupport.quote(args);
     }
 
