@@ -58,7 +58,7 @@ public class TiaTestListener implements TestExecutionListener {
     @Override
     public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
         TestSource source = testIdentifier.getSource().orElse(null);
-        if (source instanceof ClassSource) {
+        if (source instanceof ClassSource && testExecutionResult.getStatus() == TestExecutionResult.Status.SUCCESSFUL) {
             Set<String> classes = AgentClassTransformer.getReferencedClasses();
             String test = ((ClassSource) source).getClassName();
             List<String> names = classes.stream()
