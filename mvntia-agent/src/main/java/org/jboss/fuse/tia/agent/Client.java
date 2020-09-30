@@ -20,11 +20,11 @@ import java.util.Set;
 
 public interface Client {
 
-    Set<String> disabledTests(String project);
+    Set<String> disabledTests(String project, String digest);
 
     void addReport(String project, String test, List<String> classes);
 
-    void writeReport(String project);
+    void writeReport(String project, String digest);
 
     void log(String level, String message);
 

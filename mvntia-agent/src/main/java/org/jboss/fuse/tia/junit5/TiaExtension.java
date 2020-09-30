@@ -34,7 +34,7 @@ public class TiaExtension implements ExecutionCondition {
         if (disabledTests == null) {
             synchronized (this) {
                 if (disabledTests == null) {
-                    disabledTests = Agent.getClient().disabledTests(Agent.getProject());
+                    disabledTests = Agent.getDisabledTests();
                 }
             }
         }
@@ -45,7 +45,8 @@ public class TiaExtension implements ExecutionCondition {
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
         Set<String> map = getDisabledTests();
         String testClass = context.getRequiredTestClass().getName();
-        if (map.contains(testClass)) {
+        boolean disabled = map.contains(testClass);
+        if (disabled) {
             return ConditionEvaluationResult.disabled("Disabled by TIA");
         } else {
             return ConditionEvaluationResult.enabled("Enabled by TIA");

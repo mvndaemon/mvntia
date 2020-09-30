@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -48,10 +49,12 @@ public class TestEncode {
             notes = sw.toString();
         }
 
-        Map<String, Map<String, Set<String>>> e = GitClient.loadReports(notes);
-        String str = GitClient.writeReports(e);
+        Map<String, Map<String, Set<String>>> e = new HashMap<>();
+        GitClient.loadReports(notes, e, new HashMap<>());
+        String str = GitClient.writeReports(e, new HashMap<>());
 
-        Map<String, Map<String, Set<String>>> e2 = GitClient.loadReports(str);
+        Map<String, Map<String, Set<String>>> e2 = new HashMap<>();
+        GitClient.loadReports(str, e2, new HashMap<>());
         assertEquals(e, e2);
     }
 }

@@ -87,7 +87,8 @@ public class Server implements Closeable {
                             case "disabledTests": {
                                 JsonArray result = new JsonArray();
                                 client.disabledTests(
-                                        request.get("project").getAsString()
+                                        request.get("project").getAsString(),
+                                        request.get("digest").getAsString()
                                 ).forEach(result::add);
                                 response = new JsonObject();
                                 response.add("result", result);
@@ -103,7 +104,7 @@ public class Server implements Closeable {
                                 response.addProperty("result", "ok");
                                 break;
                             case "writeReport":
-                                client.writeReport(request.get("project").getAsString());
+                                client.writeReport(request.get("project").getAsString(), request.get("digest").getAsString());
                                 response = new JsonObject();
                                 response.addProperty("result", "ok");
                                 break;

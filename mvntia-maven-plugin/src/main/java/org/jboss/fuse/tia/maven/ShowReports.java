@@ -18,10 +18,14 @@ package org.jboss.fuse.tia.maven;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -62,9 +66,12 @@ public class ShowReports extends AbstractMojo {
         try {
             GitStorage storage = new GitStorage(executionDir);
             String str = storage.getNotes();
-            Map map = GitClient.loadReports(str);
+            if (str != null && !str.trim().startsWith("{")) {
+                str = GitClient.uncompress(str);
+            }
+            JsonElement e = JsonParser.parseString(str);
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            String notes = gson.toJson(map);
+            String notes = gson.toJson(e);
             if (file != null) {
                 Files.writeString(Paths.get(file), notes);
             } else {

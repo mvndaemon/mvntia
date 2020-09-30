@@ -40,13 +40,17 @@ import static java.lang.String.format;
 
 public class AgentOptions {
 
+    public static final String DIGEST = "digest";
+
+    public static final String FORCE = "force";
+
     public static final String PORT = "port";
 
     public static final String PROJECT = "project";
 
     public static final String REACTOR_DEPS = "reactorDeps";
 
-    private static final Collection<String> VALID_OPTIONS = Arrays.asList(PORT, PROJECT, REACTOR_DEPS);
+    private static final Collection<String> VALID_OPTIONS = Arrays.asList(DIGEST, FORCE, PORT, PROJECT, REACTOR_DEPS);
 
     private static final Pattern OPTION_SPLIT = Pattern.compile(",(?=[a-zA-Z0-9_\\-]+=)");
 
@@ -85,6 +89,14 @@ public class AgentOptions {
         }
     }
 
+    public String getDigest() {
+        return getOption(DIGEST, "");
+    }
+
+    public boolean isForce() {
+        return getOption(FORCE, false);
+    }
+
     public int getPort() {
         return getOption(PORT, 0);
     }
@@ -95,6 +107,16 @@ public class AgentOptions {
 
     public String getReactorDeps() {
         return getOption(REACTOR_DEPS, "");
+    }
+
+    public AgentOptions digest(final String project) {
+        setOption(DIGEST, project);
+        return this;
+    }
+
+    public AgentOptions force(boolean force) {
+        setOption(FORCE, force);
+        return this;
     }
 
     /**
@@ -165,12 +187,21 @@ public class AgentOptions {
                 .collect(Collectors.joining(","));
     }
 
+    private void setOption(final String key, final boolean value) {
+        setOption(key, Boolean.toString(value));
+    }
+
     private void setOption(final String key, final int value) {
         setOption(key, Integer.toString(value));
     }
 
     private void setOption(final String key, final String value) {
         options.put(key, value);
+    }
+
+    private boolean getOption(final String key, final boolean defaultValue) {
+        final String value = options.get(key);
+        return value == null ? defaultValue : Boolean.parseBoolean(value);
     }
 
     private int getOption(final String key, final int defaultValue) {

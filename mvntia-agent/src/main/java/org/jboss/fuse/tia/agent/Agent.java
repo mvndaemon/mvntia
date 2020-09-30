@@ -23,47 +23,50 @@ public class Agent {
 
     private static Client client;
 
-    private static String project;
+    private static AgentOptions options;
 
-    private static String reactorDeps;
-
-    public static Client getClient() {
-        return client;
+    public static Set<String> getDisabledTests() {
+        return options.isForce()
+                ? Set.of()
+                : client.disabledTests(options.getProject(), options.getDigest());
     }
 
-    public static String getProject() {
-        return project;
+    public static void addReport(String test, List<String> classes) {
+        client.addReport(options.getProject(), test, classes);
     }
 
-    public static String getReactorDeps() {
-        return reactorDeps;
+    public static void writeReport() {
+        client.writeReport(options.getProject(), options.getDigest());
+    }
+
+    public static void log(String level, String message) {
+        client.log(level, message);
     }
 
     static {
         client = new Client() {
             @Override
-            public Set<String> disabledTests(String project) {
+            public Set<String> disabledTests(String project, String digest) {
                 return Set.of();
             }
             @Override
             public void addReport(String project, String test, List<String> classes) {
             }
             @Override
-            public void writeReport(String project) {
+            public void writeReport(String project, String digest) {
             }
             @Override
             public void log(String level, String message) {
             }
         };
-        project = "";
+        options = new AgentOptions("");
     }
 
     public static void premain(String args, Instrumentation instrumentation) {
         try {
-            AgentOptions options = new AgentOptions(args);
+            options = new AgentOptions(args);
             client = new HttpClient(options.getPort());
-            project = options.getProject();
-            reactorDeps = options.getReactorDeps();
+            String reactorDeps = options.getReactorDeps();
             Set<String> deps = reactorDeps.isBlank() ? Set.of() : Set.of(reactorDeps.split(";"));
             instrumentation.addTransformer(new AgentClassTransformer(deps));
         } catch (Throwable t) {

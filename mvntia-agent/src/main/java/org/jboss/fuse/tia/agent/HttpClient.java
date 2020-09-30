@@ -42,11 +42,12 @@ public class HttpClient implements Client {
     }
 
     @Override
-    public Set<String> disabledTests(String project) {
+    public Set<String> disabledTests(String project, String digest) {
         try {
             JsonObject req = new JsonObject();
             req.addProperty("request", "disabledTests");
             req.addProperty("project", project);
+            req.addProperty("digest", digest);
             JsonObject rep = request(req);
             if (rep.has("error")) {
                 throw new IOException(rep.get("error").toString());
@@ -77,11 +78,12 @@ public class HttpClient implements Client {
     }
 
     @Override
-    public void writeReport(String project) {
+    public void writeReport(String project, String digest) {
         try {
             JsonObject req = new JsonObject();
             req.addProperty("request", "writeReport");
             req.addProperty("project", project);
+            req.addProperty("digest", digest);
             JsonObject rep = request(req);
             if (rep.has("error")) {
                 throw new IOException(rep.get("error").toString());

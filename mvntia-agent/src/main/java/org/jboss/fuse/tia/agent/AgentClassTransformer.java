@@ -132,6 +132,7 @@ public class AgentClassTransformer implements ClassFileTransformer {
     public boolean isGeneratedClass(String name) {
         return name.contains("$MockitoMock$")
                 || name.contains("$FastClassBySpringCGLIB$")
+                || name.contains("$EnhancerBySpringCGLIB$")
                 || name.contains("$Proxy$");
     }
 
@@ -155,7 +156,7 @@ public class AgentClassTransformer implements ClassFileTransformer {
             e.printStackTrace(pw);
             pw.close();
             String stackTrace = sw.toString();
-            Agent.getClient().log(level, "Error instrumenting " + name + "\n" + stackTrace);
+            Agent.log(level, "Error instrumenting " + name + "\n" + stackTrace);
         }
         return classfileBuffer;
     }

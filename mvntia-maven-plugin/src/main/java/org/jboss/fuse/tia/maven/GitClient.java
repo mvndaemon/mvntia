@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -68,6 +69,7 @@ public class GitClient implements Client {
 
     ReportStatus status;
     Set<String> modified;
+    final Map<String, String> digests = new HashMap<>();
     final Map<String, Map<String, Set<String>>> reports = new TreeMap<>();
     final Map<String, Map<String, Set<String>>> temporary = new HashMap<>();
 
@@ -91,7 +93,7 @@ public class GitClient implements Client {
             }
             // Load existing test reports
             synchronized (reports) {
-                reports.putAll(readNotes());
+                readNotes();
             }
             // Load modified files
             modified = new TreeSet<>();
@@ -148,17 +150,23 @@ public class GitClient implements Client {
         return className;
     }
 
-    public Set<String> disabledTests(String projectId) {
+    public Set<String> disabledTests(String projectId, String digest) {
         try {
             initialized.await();
             // Find out which tests can be skipped
             // disabled tests are those which are not impacted by any modified files
             Set<String> disabled;
             synchronized (reports) {
-                disabled = reports.computeIfAbsent(projectId, p -> new TreeMap<>()).entrySet().stream()
-                        .filter(e -> !isImpactedBy(e.getKey(), e.getValue(), modified))
-                        .map(Map.Entry::getKey)
-                        .collect(Collectors.toSet());
+                Map<String, Set<String>> report = reports.computeIfAbsent(projectId, p -> new TreeMap<>());
+                if (Objects.equals(digest, digests.get(projectId))) {
+                    disabled = report.entrySet().stream()
+                            .filter(e -> !isImpactedBy(e.getKey(), e.getValue(), modified))
+                            .map(Map.Entry::getKey)
+                            .collect(Collectors.toSet());
+                } else {
+                    logger.warn("Dependencies have changed, ignoring existing TIA data");
+                    disabled = new HashSet<>();
+                }
             }
             LOGGER.debug("mvntia::disabledTests({}) => {}", projectId, disabled);
             return disabled;
@@ -182,7 +190,7 @@ public class GitClient implements Client {
         }
     }
 
-    public void writeReport(String projectId) {
+    public void writeReport(String projectId, String digest) {
         try {
             initialized.await();
             if (status == ReportStatus.CLEAN) {
@@ -195,9 +203,9 @@ public class GitClient implements Client {
                     String str;
                     synchronized (reports) {
                         Map<String, Set<String>> newRep = reports.computeIfAbsent(projectId, p -> new TreeMap<>());
-                        rep.entrySet().forEach(e -> newRep.computeIfAbsent(e.getKey(), s -> new HashSet<>())
-                                .addAll(e.getValue()));
-                        str = writeReports(reports);
+                        rep.forEach((key, value) -> newRep.computeIfAbsent(key, s -> new HashSet<>()).addAll(value));
+                        digests.put(projectId, digest);
+                        str = writeReports(reports, digests);
                     }
                     try (Writer writer = storage.buildWriter()) {
                         writer.write(str);
@@ -212,12 +220,12 @@ public class GitClient implements Client {
         }
     }
 
-    private Map<String, Map<String, Set<String>>> readNotes() throws IOException {
+    private void readNotes() throws IOException {
         String notes = storage.getNotes();
-        return loadReports(notes);
+        loadReports(notes, reports, digests);
     }
 
-    public static String writeReports(Map<String, ? extends Map<String, ? extends Collection<String>>> reports) throws IOException {
+    public static String writeReports(Map<String, ? extends Map<String, ? extends Collection<String>>> reports, Map<String, String> digests) throws IOException {
         Map<String, Long> counts = reports.values().stream().map(Map::values)
                 .flatMap(Collection::stream)
                 .flatMap(Collection::stream)
@@ -239,6 +247,7 @@ public class GitClient implements Client {
                         classes.put(v, s);
                     });
             output.put("classes", classes);
+            output.put("digests", digests);
             for (Map.Entry<String, ? extends Map<String, ? extends Collection<String>>> entry : reports.entrySet()) {
                 String module = entry.getKey();
                 Map<String, String> tests = new TreeMap<>();
@@ -254,7 +263,10 @@ public class GitClient implements Client {
             }
             result = new Gson().toJson(output);
         } else {
-            result = new Gson().toJson(reports);
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("digests", digests);
+            output.putAll(reports);
+            result = new Gson().toJson(output);
         }
 
         if (result.length() > 100_000) {
@@ -263,41 +275,54 @@ public class GitClient implements Client {
         return result;
     }
 
-    public static Map<String, Map<String, Set<String>>> loadReports(String notes) throws IOException {
+    public static void loadReports(String notes, Map<String, Map<String, Set<String>>> reports, Map<String, String> digests) throws IOException {
         if (notes == null || notes.isBlank()) {
-            return new LinkedHashMap<>();
+            return;
         }
         // if not empty and not starting with '{', assume base64+compressed
         if (!notes.trim().startsWith("{")) {
             notes = uncompress(notes);
         }
         JsonObject element = JsonParser.parseString(notes).getAsJsonObject();
+        if (element.has("digests")) {
+            element.remove("digests").getAsJsonObject().entrySet()
+                    .forEach(e -> digests.put(e.getKey(), e.getValue().getAsString()));
+        }
+        Map<String, String> dict;
         if (element.has("classes")) {
-            Map<String, String> dict = element.remove("classes").getAsJsonObject().entrySet().stream()
+            dict = element.remove("classes").getAsJsonObject().entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getAsString()));
-            Map<String, Map<String, Set<String>>> reports = element.entrySet().stream().collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> e.getValue().getAsJsonObject().entrySet().stream().collect(Collectors.toMap(
-                                Map.Entry::getKey,
-                                e2 -> {
-                                    String s = e2.getValue().getAsString();
-                                    if (s.isBlank()) {
-                                        return new HashSet<>();
-                                    } else {
-                                        String[] ss = s.split(" ");
-                                        return Stream.of(ss).map(dict::get).sorted().collect(Collectors.toSet());
-                                    }
-                                }))));
-            return reports;
         } else {
-            Map<String, Map<String, Set<String>>> reports = element.entrySet().stream().collect(Collectors.toMap(
+            dict = null;
+        }
+        for (Map.Entry<String, JsonElement> entry : element.entrySet()) {
+            String key = entry.getKey();
+            Map<String, Set<String>> value = entry.getValue().getAsJsonObject().entrySet().stream().collect(Collectors.toMap(
                     Map.Entry::getKey,
-                    e -> e.getValue().getAsJsonObject().entrySet().stream().collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            e2 -> StreamSupport.stream(e2.getValue().getAsJsonArray().spliterator(), false)
-                                    .map(JsonElement::getAsString)
-                                    .sorted().collect(Collectors.toSet())))));
-            return reports;
+                    e2 -> getClasses(dict, e2.getValue())));
+            reports.put(key, value);
+        }
+    }
+
+    public static Set<String> getClasses(JsonElement v) {
+        return StreamSupport.stream(v.getAsJsonArray().spliterator(), false)
+                .map(JsonElement::getAsString)
+                .sorted().collect(Collectors.toSet());
+    }
+
+    public static Set<String> getClasses(Map<String, String> dict, JsonElement v) {
+        if (dict == null) {
+            return StreamSupport.stream(v.getAsJsonArray().spliterator(), false)
+                    .map(JsonElement::getAsString)
+                    .sorted().collect(Collectors.toSet());
+        } else {
+            String s = v.getAsString();
+            if (s.isBlank()) {
+                return new HashSet<>();
+            } else {
+                String[] ss = s.split(" ");
+                return Stream.of(ss).map(dict::get).sorted().collect(Collectors.toSet());
+            }
         }
     }
 

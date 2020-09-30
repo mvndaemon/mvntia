@@ -51,7 +51,7 @@ public class TiaTestListener implements TestExecutionListener {
     public void executionStarted(TestIdentifier testIdentifier) {
         TestSource source = testIdentifier.getSource().orElse(null);
         if (source instanceof ClassSource) {
-            Agent.getClient().log("debug", "executionStarted: " + testIdentifier);
+            Agent.log("debug", "executionStarted: " + testIdentifier);
         }
     }
 
@@ -72,7 +72,7 @@ public class TiaTestListener implements TestExecutionListener {
                     .collect(Collectors.toList());
             addReport(test, names);
             AgentClassTransformer.cleanUp();
-            Agent.getClient().log("debug", "executionFinished: referenced classes: " + names);
+            Agent.log("debug", "executionFinished: referenced classes: " + names);
         }
     }
 
@@ -84,7 +84,7 @@ public class TiaTestListener implements TestExecutionListener {
         } catch (InterruptedException e) {
             LOGGER.log(Level.SEVERE, "Error waiting for runner thread", e);
         }
-        Agent.getClient().writeReport(Agent.getProject());
+        Agent.writeReport();
     }
 
     private void addReport(String test, List<String> classes) {
@@ -98,13 +98,12 @@ public class TiaTestListener implements TestExecutionListener {
                 if (Objects.equals(STOP, report.test)) {
                     break;
                 }
-                Agent.getClient().addReport(Agent.getProject(), report.test, report.classes);
+                Agent.addReport(report.test, report.classes);
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error sending reports", e);
         }
     }
-
 
     static class Report {
         final String test;
