@@ -311,6 +311,19 @@ public class GitStorage {
         }
     }
 
+    public void removeNote() throws IOException {
+        try (Git git = GitStorage.this.open()) {
+            RevWalk walk = new RevWalk(git.getRepository());
+            RevCommit commit = walk.parseCommit(GitStorage.this.getBaseObjectId(git));
+            git.notesRemove().setNotesRef(GIT_NOTES_REF)
+                    .setObjectId(commit).call();
+            LOGGER.info("Notes removed from commit {}", commit);
+        } catch (Exception e) {
+            LOGGER.error("Error writing Tests Report in the Git Notes", e);
+            throw new IOException("Error from the GitNotesWriter", e);
+        }
+    }
+
     private Set<String> getUpdatesFromTheBaseBranch(Git git, String baseRef, String headRef) throws IOException, GitAPIException {
 
         Set<String> files = new LinkedHashSet<>();
