@@ -16,9 +16,11 @@
 package org.jboss.fuse.tia.junit5;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -29,6 +31,7 @@ import org.jboss.fuse.tia.agent.AgentClassTransformer;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
@@ -41,6 +44,7 @@ public class TiaTestListener implements TestExecutionListener {
 
     private final BlockingDeque<Report> reports = new LinkedBlockingDeque<>();
     private final Thread runner;
+    private final Map<String, TestExecutionResult.Status> results = new ConcurrentHashMap<>();
 
     public TiaTestListener() {
         runner = new Thread(this::sendReports);
@@ -58,21 +62,28 @@ public class TiaTestListener implements TestExecutionListener {
     @Override
     public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
         TestSource source = testIdentifier.getSource().orElse(null);
-        if (source instanceof ClassSource && testExecutionResult.getStatus() == TestExecutionResult.Status.SUCCESSFUL) {
+        if (source instanceof MethodSource) {
+            String test = ((MethodSource) source).getClassName();
+            results.merge(test, testExecutionResult.getStatus(), (s1, s2) -> s1 != TestExecutionResult.Status.SUCCESSFUL ? s1 : s2);
+        }
+        if (source instanceof ClassSource) {
             Set<String> classes = AgentClassTransformer.getReferencedClasses();
             String test = ((ClassSource) source).getClassName();
-            List<String> names = classes.stream()
-                    .map(s -> {
-                        int i = s.indexOf('$');
-                        return i > 0 ? s.substring(0, i) : s;
-                    })
-                    .filter(s -> !test.equals(s))
-                    .sorted()
-                    .distinct()
-                    .collect(Collectors.toList());
-            addReport(test, names);
-            AgentClassTransformer.cleanUp();
-            Agent.log("debug", "executionFinished: referenced classes: " + names);
+            results.merge(test, testExecutionResult.getStatus(), (s1, s2) -> s1 != TestExecutionResult.Status.SUCCESSFUL ? s1 : s2);
+            if (results.remove(test) == TestExecutionResult.Status.SUCCESSFUL) {
+                List<String> names = classes.stream()
+                        .map(s -> {
+                            int i = s.indexOf('$');
+                            return i > 0 ? s.substring(0, i) : s;
+                        })
+                        .filter(s -> !test.equals(s))
+                        .sorted()
+                        .distinct()
+                        .collect(Collectors.toList());
+                addReport(test, names);
+                AgentClassTransformer.cleanUp();
+                Agent.log("debug", "executionFinished: " + test + ": referenced classes: " + names);
+            }
         }
     }
 
