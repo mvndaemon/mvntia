@@ -236,10 +236,10 @@ public class GitClient implements Client {
         if (counts.values().stream().anyMatch(l -> l > 1000)) {
             AtomicInteger index = new AtomicInteger();
             Map<String, Object> output = new LinkedHashMap<>();
-            Map<String, String> classes = new TreeMap<>();
-            Map<String, String> revClasses = new TreeMap<>();
+            Map<String, String> classes = new LinkedHashMap<>();
+            Map<String, String> revClasses = new LinkedHashMap<>();
             counts.keySet().stream()
-                    .sorted(Comparator.comparingLong(counts::get).reversed())
+                    .sorted(Comparator.<String>comparingLong(counts::get).reversed().thenComparing(Comparator.naturalOrder()))
                     .distinct()
                     .forEach(s -> {
                         String v = Integer.toHexString(index.incrementAndGet());
