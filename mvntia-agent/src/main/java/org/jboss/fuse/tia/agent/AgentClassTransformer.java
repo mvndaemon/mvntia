@@ -133,6 +133,7 @@ public class AgentClassTransformer implements ClassFileTransformer {
         return name.contains("$MockitoMock$")
                 || name.contains("$FastClassBySpringCGLIB$")
                 || name.contains("$EnhancerBySpringCGLIB$")
+                || name.contains("$EnhancerByCGLIB$")
                 || name.contains("$Proxy$");
     }
 

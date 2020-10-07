@@ -24,6 +24,9 @@
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
+    <name>Maven TIA - Parent</name>
+    <inceptionYear>2020</inceptionYear>
+
     <modules>
         <module>mvntia-agent</module>
         <module>mvntia-maven-plugin</module>

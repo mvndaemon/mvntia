@@ -15,71 +15,48 @@
  */
 package org.jboss.fuse.tia.maven;
 
-import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import org.apache.maven.plugin.AbstractMojo;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.project.MavenProject;
-import org.jboss.fuse.tia.reports.GitStorage;
+import org.jboss.fuse.tia.reports.Reports;
+import org.jboss.fuse.tia.reports.Storage;
 
 @Mojo(name = "show-reports", defaultPhase = LifecyclePhase.INITIALIZE,
         requiresDependencyResolution = ResolutionScope.RUNTIME, threadSafe = true)
-public class ShowReports extends AbstractMojo {
-
-    /**
-     * Maven project.
-     */
-    @Parameter(property = "project", readonly = true)
-    MavenProject project;
+public class ShowReports extends AbstractTiaMojo {
 
     @Parameter(property = "mvntia.file")
     String file;
 
-    public final void execute() throws MojoExecutionException, MojoFailureException {
-        String executionDir;
-        File parent = new File(".").getAbsoluteFile();
-        boolean isGit = new File(parent, ".git").exists();
-        while (parent.getParentFile() != null && !isGit) {
-            parent = parent.getParentFile();
-            isGit = new File(parent, ".git").exists();
-        }
-        if (isGit) {
-            executionDir = parent.getAbsolutePath();
+    public final void doExecute() throws Exception {
+        String notes = readNotes(createStorage());
+        if (file != null) {
+            Files.writeString(Paths.get(file), notes);
         } else {
-            throw new RuntimeException("It is not a Git repository");
+            System.out.println(notes);
         }
+    }
 
-        try {
-            GitStorage storage = new GitStorage(executionDir);
-            String str = storage.getNotes();
-            if (str != null && !str.trim().startsWith("{")) {
-                str = GitClient.uncompress(str);
-            }
-            JsonElement e = JsonParser.parseString(str);
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            String notes = gson.toJson(e);
-            if (file != null) {
-                Files.writeString(Paths.get(file), notes);
-            } else {
-                System.out.println(notes);
-            }
-        } catch (Exception e) {
-            throw new MojoFailureException("Error setting up agent", e);
+    public String readNotes(Storage storage) throws IOException {
+        String notes = storage.getNotes();
+        if (notes != null && !notes.trim().startsWith("{")) {
+            notes = Reports.uncompress(notes);
         }
+        if (notes != null && !notes.isBlank()) {
+            JsonElement e = JsonParser.parseString(notes);
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            notes = gson.toJson(e);
+        }
+        return notes;
     }
 
 }

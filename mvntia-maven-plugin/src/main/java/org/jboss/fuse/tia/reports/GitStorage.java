@@ -17,8 +17,6 @@ package org.jboss.fuse.tia.reports;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.StringWriter;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -26,9 +24,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.diff.DiffEntry;
@@ -45,7 +43,7 @@ import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class GitStorage {
+public class GitStorage implements Storage {
 
     protected static final Logger LOGGER = LoggerFactory.getLogger(GitStorage.class);
 
@@ -55,47 +53,19 @@ public class GitStorage {
 
     protected final String executionDir;
 
-    static {
-//    SshSessionFactory.setInstance(new JschConfigSessionFactory() {
-//      public void configure(OpenSshConfig.Host hc, Session session) {
-//        session.setConfig("StrictHostKeyChecking", "no");
-//      }
-//    });
-//        HttpTransport.setConnectionFactory(
-//                new org.eclipse.jgit.transport.http.apache.HttpClientConnectionFactory());
-    }
-
-    public GitStorage() {
-        try {
-            File parent = new File(".").getCanonicalFile();
-            boolean isGit = new File(parent, ".git").exists();
-            while (parent.getParentFile() != null && !isGit) {
-                parent = parent.getParentFile();
-                isGit = new File(parent, ".git").exists();
-            }
-            if (isGit) {
-                this.executionDir = parent.getCanonicalPath();
-            } else {
-                throw new RuntimeException("It is not a Git repository");
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     public GitStorage(String executionDir) {
         this.executionDir = executionDir;
     }
 
-    public ReportStatus getStatus() {
+    public Status getStatus() {
         try (Git git = open()) {
             if (getLocalBaseBranchSha(git) == null) {
-                return ReportStatus.NO_COMMIT;
+                return Status.NO_COMMIT;
             }
             if (isClean(git)) {
-                return ReportStatus.CLEAN;
+                return Status.CLEAN;
             } else {
-                return ReportStatus.DIRTY;
+                return Status.DIRTY;
             }
         } catch (Exception e) {
             throw new RuntimeException("Error resolving the status in " + GIT_NOTES_REF, e);
@@ -106,17 +76,17 @@ public class GitStorage {
      * Method called before any read or writing operation; whose purpose
      * is to initialize/prepare the required resources.
      */
-    public ReportStatus prepare() {
+    public Status prepare() {
         try (Git git = open()) {
             Ref ref = fetchNotesRef(git);
             if (ref == null) {
                 createGitNotesRef(git);
-                return ReportStatus.CLEAN;
+                return Status.CLEAN;
             } else if (isClean(git)) {
                 removeLastNote(git);
-                return ReportStatus.CLEAN;
+                return Status.CLEAN;
             } else {
-                return ReportStatus.DIRTY;
+                return Status.DIRTY;
             }
         } catch (Exception e) {
             throw new RuntimeException("Error removing the existing Git notes in " + GIT_NOTES_REF, e);
@@ -211,28 +181,6 @@ public class GitStorage {
         }
     }
 
-    /**
-     * Returns a writer to update the base report. Used to incrementally add news reports
-     *
-     * @return a writer to update the base report.
-     * @throws IOException
-     */
-    public Writer buildWriter() throws IOException {
-        try (Git git = open()) {
-            if (isClean(git)) {
-                LOGGER.info("Tests Report:[READY]. Master branch is clean");
-                return new GitNotesWriter();
-            } else {
-                LOGGER.info("Tests Report [OMITTED]. If you are in master branch, " +
-                        "check that there are no pending changes to commit");
-                return new StringWriter();
-            }
-        } catch (GitAPIException e) {
-            LOGGER.error("Error checking master branch status", e);
-            throw new IOException("Error building the git notes writer", e);
-        }
-    }
-
 
     protected RevCommit getBaseBranchCommit(Git git) throws IOException {
         String branch = git.getRepository().getBranch();
@@ -241,7 +189,7 @@ public class GitStorage {
         return walk.parseCommit(localBaseBranch.getObjectId());
     }
 
-    protected boolean isBaseBranch(Git git) throws GitAPIException, IOException {
+    protected boolean isBaseBranch(Git git) throws IOException {
         String branch = git.getRepository().getBranch();
         Ref localBaseBranch = getLocalBaseBranchSha(git);
         RevCommit baseBranchCommit = getBaseBranchCommit(git);
@@ -266,7 +214,7 @@ public class GitStorage {
                 return baseCommit.equals(baseBranchCommit) && git.status().call().isClean();
             } else {
                 // there is no origin
-                Status status = git.status().call();
+                org.eclipse.jgit.api.Status status = git.status().call();
                 boolean isClean = status.isClean();
                 if (!isClean) {
                     LOGGER.info("Untracked Folders: " + Arrays.toString(status.getUntrackedFolders().toArray()));
@@ -286,18 +234,7 @@ public class GitStorage {
     }
 
 
-    public class GitNotesWriter extends StringWriter {
-
-        public GitNotesWriter() {
-        }
-
-        @Override
-        public void close() throws IOException {
-            writeNote(getBuffer().toString());
-        }
-    }
-
-    private void writeNote(String message) throws IOException {
+    public void writeNotes(String message) throws IOException {
         try (Git git = GitStorage.this.open()) {
             RevWalk walk = new RevWalk(git.getRepository());
             RevCommit commit = walk.parseCommit(GitStorage.this.getBaseObjectId(git));
@@ -306,12 +243,12 @@ public class GitStorage {
                     .setMessage(message).call();
             LOGGER.info("Notes added to commit {}", commit);
         } catch (Exception e) {
-            LOGGER.error("Error writing Tests Report in the Git Notes", e);
-            throw new IOException("Error from the GitNotesWriter", e);
+            LOGGER.error("Error writing git notes", e);
+            throw new IOException("Error writing git notes", e);
         }
     }
 
-    public void removeNote() throws IOException {
+    public void removeNotes() throws IOException {
         try (Git git = GitStorage.this.open()) {
             RevWalk walk = new RevWalk(git.getRepository());
             RevCommit commit = walk.parseCommit(GitStorage.this.getBaseObjectId(git));
@@ -319,8 +256,22 @@ public class GitStorage {
                     .setObjectId(commit).call();
             LOGGER.info("Notes removed from commit {}", commit);
         } catch (Exception e) {
-            LOGGER.error("Error writing Tests Report in the Git Notes", e);
-            throw new IOException("Error from the GitNotesWriter", e);
+            LOGGER.error("Error removing git notes", e);
+            throw new IOException("Error removing git notes", e);
+        }
+    }
+
+    @Override
+    public Set<String> getChangedFiles() throws IOException {
+        try (Git git = GitStorage.this.open()) {
+            Set<String> modified = new TreeSet<>();
+            modified.addAll(getUpdatesFromTheBaseBranch(git, "origin/master",
+                    git.getRepository().getBranch()));
+            modified.addAll(getModifiedOrChangedFiles(git));
+            return modified;
+        } catch (Exception e) {
+            LOGGER.error("Error retrieving changed files", e);
+            throw new IOException("Error retrieving changed files", e);
         }
     }
 
@@ -355,37 +306,10 @@ public class GitStorage {
 
     private Set<String> getModifiedOrChangedFiles(Git git) throws IOException, GitAPIException {
         Set<String> changed = new LinkedHashSet<>();
-        Status status = git.status().call();
+        org.eclipse.jgit.api.Status status = git.status().call();
         changed.addAll(status.getModified());
         changed.addAll(status.getChanged());
         return changed;
-    }
-
-    /**
-     * Returns the list of committed files whose commits are not yet in origin/master
-     *
-     * @return The list of committed files whose commits are not yet in origin/master
-     * @throws IOException
-     * @throws GitAPIException
-     */
-    public Set<String> getChangedAndCommittedFiles() throws IOException, GitAPIException {
-        try (Git git = open()) {
-            return getUpdatesFromTheBaseBranch(git, "origin/master",
-                    git.getRepository().getBranch());
-        }
-    }
-
-    /**
-     * Returns the list of existing committed files with pending changes to commit
-     *
-     * @return the list of existing committed files with pending changes to commit
-     * @throws IOException
-     * @throws GitAPIException
-     */
-    public Set<String> getFilesWithUntrackedChanges() throws IOException, GitAPIException {
-        try (Git git = open()) {
-            return getModifiedOrChangedFiles(git);
-        }
     }
 
 }

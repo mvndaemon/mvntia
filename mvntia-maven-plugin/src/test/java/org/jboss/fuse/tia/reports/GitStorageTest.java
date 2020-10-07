@@ -13,18 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jboss.fuse.tia.maven;
+package org.jboss.fuse.tia.reports;
 
-import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.ResolutionScope;
-
-@Mojo(name = "delete-reports", defaultPhase = LifecyclePhase.INITIALIZE,
-        requiresDependencyResolution = ResolutionScope.RUNTIME, threadSafe = true)
-public class DeleteReports extends AbstractTiaMojo {
-
-    public void doExecute() throws Exception {
-        createStorage().removeNotes();
-    }
-
+public class GitStorageTest {
 }

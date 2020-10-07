@@ -24,19 +24,18 @@ import java.util.Map;
 import java.util.Set;
 
 import org.codehaus.plexus.util.IOUtil;
-import org.jboss.fuse.tia.maven.GitClient;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestEncode {
+public class ReportsTest {
 
     @Test
     public void testCompression() throws IOException {
         String notes = "foo bar";
 
-        String compressed = GitClient.compress(notes);
-        String uncompressed = GitClient.uncompress(compressed);
+        String compressed = Reports.compress(notes);
+        String uncompressed = Reports.uncompress(compressed);
         assertEquals(notes, uncompressed);
     }
 
@@ -50,11 +49,11 @@ public class TestEncode {
         }
 
         Map<String, Map<String, Set<String>>> e = new HashMap<>();
-        GitClient.loadReports(notes, e, new HashMap<>());
-        String str = GitClient.writeReports(e, new HashMap<>());
+        Reports.loadReports(notes, e, new HashMap<>());
+        String str = Reports.writeReports(e, new HashMap<>());
 
         Map<String, Map<String, Set<String>>> e2 = new HashMap<>();
-        GitClient.loadReports(str, e2, new HashMap<>());
+        Reports.loadReports(str, e2, new HashMap<>());
         assertEquals(e, e2);
     }
 }

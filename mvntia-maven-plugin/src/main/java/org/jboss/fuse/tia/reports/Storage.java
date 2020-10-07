@@ -15,6 +15,19 @@
  */
 package org.jboss.fuse.tia.reports;
 
-public enum ReportStatus {
-    NO_COMMIT, CLEAN, DIRTY
+import java.io.IOException;
+import java.util.Set;
+
+public interface Storage {
+
+    Status getStatus();
+
+    String getNotes() throws IOException;
+
+    void removeNotes() throws IOException;
+
+    void writeNotes(String notes) throws IOException;
+
+    Set<String> getChangedFiles() throws IOException;
+
 }
