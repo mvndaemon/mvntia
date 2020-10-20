@@ -15,10 +15,12 @@
  */
 package org.jboss.fuse.tia.junit5;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -71,15 +73,13 @@ public class TiaTestListener implements TestExecutionListener {
             String test = ((ClassSource) source).getClassName();
             results.merge(test, testExecutionResult.getStatus(), (s1, s2) -> s1 != TestExecutionResult.Status.SUCCESSFUL ? s1 : s2);
             if (results.remove(test) == TestExecutionResult.Status.SUCCESSFUL) {
-                List<String> names = classes.stream()
+                Collection<String> names = classes.stream()
                         .map(s -> {
                             int i = s.indexOf('$');
                             return i > 0 ? s.substring(0, i) : s;
                         })
                         .filter(s -> !test.equals(s))
-                        .sorted()
-                        .distinct()
-                        .collect(Collectors.toList());
+                        .collect(Collectors.toCollection(TreeSet::new));
                 addReport(test, names);
                 AgentClassTransformer.cleanUp();
                 Agent.log("debug", "executionFinished: " + test + ": referenced classes: " + names);
@@ -98,7 +98,7 @@ public class TiaTestListener implements TestExecutionListener {
         Agent.writeReport();
     }
 
-    private void addReport(String test, List<String> classes) {
+    private void addReport(String test, Collection<String> classes) {
         reports.add(new Report(test, classes));
     }
 
@@ -118,9 +118,9 @@ public class TiaTestListener implements TestExecutionListener {
 
     static class Report {
         final String test;
-        final List<String> classes;
+        final Collection<String> classes;
 
-        public Report(String test, List<String> classes) {
+        public Report(String test, Collection<String> classes) {
             this.test = test;
             this.classes = classes;
         }

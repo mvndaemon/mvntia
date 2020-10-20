@@ -39,6 +39,10 @@ public class ShowReports extends AbstractTiaMojo {
 
     public final void doExecute() throws Exception {
         String notes = readNotes(createStorage());
+        if (notes == null) {
+            getLog().warn("No report available in this branch");
+            return;
+        }
         if (file != null) {
             Files.writeString(Paths.get(file), notes);
         } else {
@@ -47,7 +51,8 @@ public class ShowReports extends AbstractTiaMojo {
     }
 
     public String readNotes(Storage storage) throws IOException {
-        String notes = storage.getNotes();
+        Storage.State state = storage.getState();
+        String notes = state != null ? state.note : null;
         if (notes != null && !notes.trim().startsWith("{")) {
             notes = Reports.uncompress(notes);
         }

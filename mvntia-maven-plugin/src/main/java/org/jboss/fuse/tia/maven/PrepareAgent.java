@@ -32,6 +32,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.jboss.fuse.tia.agent.AgentOptions;
+import org.jboss.fuse.tia.reports.GitClient;
 
 @Mojo(name = "prepare-agent", defaultPhase = LifecyclePhase.INITIALIZE,
         requiresDependencyResolution = ResolutionScope.TEST, threadSafe = true)
@@ -72,7 +73,7 @@ public class PrepareAgent extends AbstractTiaMojo {
     /**
      * Property name to set
      */
-    @Parameter(defaultValue = SUREFIRE_ARG_LINE)
+    @Parameter(property = "mvntia.propertyName", defaultValue = SUREFIRE_ARG_LINE)
     String propertyName;
 
     @Parameter(property = "mvntia.force")
@@ -109,7 +110,8 @@ public class PrepareAgent extends AbstractTiaMojo {
         String artifactsSet = project.getArtifacts().stream()
                 .map(Artifact::toString)
                 .collect(Collectors.joining(" "));
-        String digest = digest(artifactsSet);
+        // String digest = digest(artifactsSet);
+        String digest = artifactsSet;
 
         Collection<ArtifactId> artifactIds = ArtifactId.toIds(artifacts);
         Set<String> reactorDeps = project.getArtifacts().stream()
@@ -128,9 +130,12 @@ public class PrepareAgent extends AbstractTiaMojo {
                 .project(id)
                 .reactorDeps(String.join(";", reactorDeps))
                 .prependVMArguments(oldValue, getAgentJarFile(), debug);
-        getLog().info("Preparing surefire to run with mvntia");
-        getLog().debug(name + " set to " + newValue);
+        getLog().debug("Preparing surefire to run with mvntia");
+        getLog().debug("    property " + name + " set to '" + newValue + "'");
+        getLog().debug("Ignoring artifacts: " + artifacts);
         projectProperties.setProperty(name, newValue);
+
+        GitClient.setLogger(id, getLog());
     }
 
     File getAgentJarFile() {

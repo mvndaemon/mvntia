@@ -110,6 +110,7 @@ public class Server implements Closeable {
                                 break;
                             case "log":
                                 client.log(
+                                        request.get("project").getAsString(),
                                         request.get("level").getAsString(),
                                         request.get("message").getAsString()
                                 );

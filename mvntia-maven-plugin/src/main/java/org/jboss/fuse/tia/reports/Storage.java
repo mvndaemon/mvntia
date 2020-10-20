@@ -16,18 +16,50 @@
 package org.jboss.fuse.tia.reports;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Set;
 
 public interface Storage {
 
-    Status getStatus();
-
-    String getNotes() throws IOException;
+    State getState() throws IOException;
 
     void removeNotes() throws IOException;
 
     void writeNotes(String notes) throws IOException;
 
-    Set<String> getChangedFiles() throws IOException;
+    class State {
+        public final String note;
+        public final Set<String> modified;
+        public final Set<String> uncommitted;
 
+        public State(String note, Set<String> modified, Set<String> uncommitted) {
+            this.note = note;
+            this.modified = modified;
+            this.uncommitted = uncommitted;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            State state = (State) o;
+            return Objects.equals(note, state.note) &&
+                    Objects.equals(modified, state.modified) &&
+                    Objects.equals(uncommitted, state.uncommitted);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(note, modified, uncommitted);
+        }
+
+        @Override
+        public String toString() {
+            return "State{" +
+                    "note='" + note + '\'' +
+                    ", modified=" + modified +
+                    ", uncommitted=" + uncommitted +
+                    '}';
+        }
+    }
 }

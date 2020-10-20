@@ -15,7 +15,7 @@
  */
 package org.jboss.fuse.tia.reports;
 
-import java.io.IOException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,51 +28,69 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
-import com.google.gson.JsonElement;
 import org.apache.maven.plugin.logging.Log;
 import org.jboss.fuse.tia.agent.Client;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 public class GitClient implements Client {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GitClient.class);
 
-    Storage storage;
-    CountDownLatch initialized = new CountDownLatch(1);
-    Log logger;
+    final Storage storage;
+    final Log logger;
+    final CountDownLatch initialized = new CountDownLatch(1);
 
-    Status status;
-    Set<String> modified;
+    Storage.State state;
     final Map<String, String> digests = new HashMap<>();
     final Map<String, Map<String, Set<String>>> reports = new TreeMap<>();
     final Map<String, Map<String, Set<String>>> temporary = new HashMap<>();
 
+    static final Map<String, Log> LOGGERS = new ConcurrentHashMap<>();
+
     public GitClient(Storage storage, Log logger) {
         this.storage = storage;
         this.logger = logger;
+        initialize();
     }
 
     public void initialize() {
-        status = Status.DIRTY;
+        state = null;
         try {
-            // Check status and prepare
-            status = storage.getStatus();
-            if (status == Status.NO_COMMIT) {
-                LOGGER.warn("Git not set up propertly, ignoring TIA...");
+            // Check storage state
+            state = storage.getState();
+            if (state == null) {
+                LOGGER.warn("Git not set up properly, ignoring TIA...");
                 return;
-            } else if (status == Status.DIRTY) {
+            } else if (!state.uncommitted.isEmpty()) {
                 LOGGER.warn("Git is dirty, TIA results won't be stored...");
             }
             // Load existing test reports
+            int nbModified;
+            int nbImpacted;
             synchronized (reports) {
-                String notes = storage.getNotes();
-                Reports.loadReports(notes, reports, digests);
+                Reports.loadReports(state.note, reports, digests);
+                // Load modified files
+                Set<String> modified = new TreeSet<>();
+                if (state.modified != null) {
+                    modified.addAll(state.modified);
+                }
+                if (state.uncommitted != null) {
+                    modified.addAll(state.uncommitted);
+                }
+                modified = modified.stream()
+                        .filter(file -> file.endsWith(".java"))
+                        .collect(Collectors.toSet());
+                logger.debug("Modified files: " + modified);
+                int countBefore = reports.values().stream().mapToInt(Map::size).sum();
+                removeTestsImpactedBy(reports, modified);
+                int countAfter = reports.values().stream().mapToInt(Map::size).sum();
+                nbImpacted = countBefore - countAfter;
+                nbModified = modified.size();
             }
-            // Load modified files
-            modified = new TreeSet<>(storage.getChangedFiles());
+            LOGGER.info(nbImpacted + " tests impacted by " + nbModified + " modified files");
         } catch (Exception e) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.warn("Unable to load test reports: " + e.toString(), e);
@@ -84,11 +102,13 @@ public class GitClient implements Client {
         }
     }
 
-    public Set<String> disabledTests(Map<String, Set<String>> report) {
-        return report.entrySet().stream()
-                .filter(e -> !isImpactedBy(e.getKey(), e.getValue(), modified))
-                .map(Map.Entry::getKey)
+    public void removeTestsImpactedBy(Map<String, Map<String, Set<String>>> reports, Set<String> modified) {
+        Set<String> m = modified.stream()
+                .map(this::fileWithoutExtension)
                 .collect(Collectors.toSet());
+        Map<String, String> toPath = new ConcurrentHashMap<>();
+        reports.values().forEach(r -> r.entrySet()
+                .removeIf(e -> isImpactedBy(e.getKey(), e.getValue(), m, toPath)));
     }
 
     /**
@@ -98,17 +118,16 @@ public class GitClient implements Client {
      * @param modifiedFiles to consider
      * @return if the test needs to be re-executed because it is impacted by a change.
      */
-    public boolean isImpactedBy(String testClass, Set<String> referencedClasses, Set<String> modifiedFiles) {
+    public boolean isImpactedBy(String testClass, Set<String> referencedClasses, Set<String> modifiedFiles, Map<String, String> toPath) {
         return modifiedFiles.stream()
-                .filter(file -> !file.endsWith(".class"))
                 .anyMatch(file ->
                     Stream.concat(Stream.of(testClass), referencedClasses.stream())
-                        .anyMatch(clazz -> matchesWithFile(clazz, file)));
+                        .anyMatch(clazz -> matchesWithFile(clazz, file, toPath)));
     }
 
-    private boolean matchesWithFile(String clazz, String statusFile) {
-        String testFilePath = toFilePath(getParentClassName(clazz));
-        return fileWithoutExtension(statusFile).endsWith(testFilePath);
+    private boolean matchesWithFile(String clazz, String statusFile, Map<String, String> toPath) {
+        String testFilePath = toPath.computeIfAbsent(clazz, c -> toFilePath(getParentClassName(c)));
+        return statusFile.endsWith(testFilePath);
     }
 
     private String toFilePath(String name) {
@@ -128,31 +147,35 @@ public class GitClient implements Client {
     public Set<String> disabledTests(String projectId, String digest) {
         try {
             initialized.await();
+            Log logger = getLog(projectId);
             // Find out which tests can be skipped
             // disabled tests are those which are not impacted by any modified files
             Set<String> disabled;
             synchronized (reports) {
                 Map<String, Set<String>> report = reports.computeIfAbsent(projectId, p -> new TreeMap<>());
-                if (Objects.equals(digest, digests.get(projectId))) {
-                    disabled = disabledTests(report);
-                } else {
-                    if (digests.containsKey(projectId)) {
-                        logger.warn("Dependencies have changed, ignoring existing TIA data");
-                    }
+                String prevDigest = digests.get(projectId);
+                if (prevDigest == null) {
                     disabled = new HashSet<>();
+                    logger.info("mvntia::disabledTests(" + projectId + ") => no previous run");
+                } else if (Objects.equals(digest, prevDigest)) {
+                    disabled = report.keySet();
+                    logger.info("mvntia::disabledTests(" + projectId + ") => " + disabled.size() + " tests disabled");
+                } else {
+                    disabled = new HashSet<>();
+                    logger.info("mvntia::disabledTests(" + projectId + ") => dependencies have changed from [" + prevDigest + " ] to [" + digest + "]");
                 }
             }
-            LOGGER.debug("mvntia::disabledTests({}) => {}", projectId, disabled);
             return disabled;
         } catch (Exception e) {
             throw new RuntimeException("Unable to retrieve disabled tests", e);
         }
     }
 
-    public void addReport(String projectId, String test, List<String> classes) {
+    public void addReport(String projectId, String test, Collection<String> classes) {
         try {
             initialized.await();
-            LOGGER.debug("mvntia::addReport({}, {}, {})", projectId, test, classes);
+            Log logger = getLog(projectId);
+            logger.info("mvntia::addReport(" + projectId + ", " + test + ", [" + classes.size() + " classes])");
             synchronized (temporary) {
                 temporary
                         .computeIfAbsent(projectId, p -> new ConcurrentHashMap<>())
@@ -167,7 +190,8 @@ public class GitClient implements Client {
     public void writeReport(String projectId, String digest) {
         try {
             initialized.await();
-            if (status == Status.CLEAN) {
+            Log logger = getLog(projectId);
+            if (state.uncommitted.isEmpty()) {
                 // Read notes
                 Map<String, Set<String>> rep;
                 synchronized (temporary) {
@@ -182,25 +206,22 @@ public class GitClient implements Client {
                         str = Reports.writeReports(reports, digests);
                     }
                     storage.writeNotes(str);
-                    LOGGER.debug("mvntia::writeReport({}) => {} bytes written", projectId, str.length());
+                    logger.info("mvntia::writeReport(" + projectId + ") => " + str.length() + " bytes written");
+                } else {
+                    logger.info("mvntia::writeReport(" + projectId + ") => no report to write");
                 }
             } else {
-                LOGGER.debug("mvntia::writeReport({}) => skipped as git repository not clean", projectId);
+                logger.warn("mvntia::writeReport(" + projectId + ") => skipped as git repository not clean");
             }
         } catch (Exception e) {
-            LOGGER.error("Error writing reports", e);
+            throw new RuntimeException("Error writing reports", e);
         }
     }
 
-    public static Set<String> getClasses(JsonElement v) {
-        return StreamSupport.stream(v.getAsJsonArray().spliterator(), false)
-                .map(JsonElement::getAsString)
-                .sorted().collect(Collectors.toSet());
-    }
-
-    public void log(String level, String message) {
+    public void log(String projectId, String level, String message) {
         try {
             initialized.await();
+            Log logger = getLog(projectId);
             switch (level) {
                 case "debug": logger.debug(message); break;
                 case "info": logger.info(message); break;
@@ -208,8 +229,20 @@ public class GitClient implements Client {
                 case "error": logger.error(message); break;
             }
         } catch (Exception e) {
-            LOGGER.error("Error logging", e);
+            throw new RuntimeException("Error logging", e);
         }
+    }
+
+    public static void setLogger(String projectId, Log logger) {
+        LOGGERS.put(projectId, logger);
+    }
+
+    protected Log getLog(String projectId) {
+        Log logger = LOGGERS.getOrDefault(projectId, this.logger);
+        if (projectId != null && projectId.contains(":")) {
+            MDC.put("maven.project.id", projectId.substring(projectId.indexOf(':') + 1));
+        }
+        return logger;
     }
 
 

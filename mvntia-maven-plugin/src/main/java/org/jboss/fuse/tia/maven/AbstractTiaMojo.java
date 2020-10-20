@@ -71,7 +71,6 @@ public abstract class AbstractTiaMojo extends AbstractMojo {
 
     protected Client createClient() throws IOException {
         GitClient client = new GitClient(createStorage(), getLog());
-        client.initialize();
         return client;
     }
 

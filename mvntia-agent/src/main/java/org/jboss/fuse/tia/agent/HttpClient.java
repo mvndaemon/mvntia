@@ -23,6 +23,7 @@ import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -61,7 +62,7 @@ public class HttpClient implements Client {
     }
 
     @Override
-    public void addReport(String project, String test, List<String> classes) {
+    public void addReport(String project, String test, Collection<String> classes) {
         try {
             JsonObject req = new JsonObject();
             req.addProperty("request", "addReport");
@@ -94,10 +95,11 @@ public class HttpClient implements Client {
     }
 
     @Override
-    public void log(String level, String message) {
+    public void log(String project, String level, String message) {
         try {
             JsonObject req = new JsonObject();
             req.addProperty("request", "log");
+            req.addProperty("project", project);
             req.addProperty("level", level);
             req.addProperty("message", message);
             JsonObject rep = request(req);

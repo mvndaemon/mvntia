@@ -16,6 +16,7 @@
 package org.jboss.fuse.tia.agent;
 
 import java.lang.instrument.Instrumentation;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -31,7 +32,7 @@ public class Agent {
                 : client.disabledTests(options.getProject(), options.getDigest());
     }
 
-    public static void addReport(String test, List<String> classes) {
+    public static void addReport(String test, Collection<String> classes) {
         client.addReport(options.getProject(), test, classes);
     }
 
@@ -40,7 +41,7 @@ public class Agent {
     }
 
     public static void log(String level, String message) {
-        client.log(level, message);
+        client.log(options.getProject(), level, message);
     }
 
     static {
@@ -50,13 +51,13 @@ public class Agent {
                 return Set.of();
             }
             @Override
-            public void addReport(String project, String test, List<String> classes) {
+            public void addReport(String project, String test, Collection<String> classes) {
             }
             @Override
             public void writeReport(String project, String digest) {
             }
             @Override
-            public void log(String level, String message) {
+            public void log(String project, String level, String message) {
             }
         };
         options = new AgentOptions("");
