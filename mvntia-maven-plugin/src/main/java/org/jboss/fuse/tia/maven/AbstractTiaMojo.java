@@ -50,7 +50,8 @@ public abstract class AbstractTiaMojo extends AbstractMojo {
 
     public String getExecutionDir() {
         if (executionDir == null) {
-            File parent = new File(".").getAbsoluteFile();
+            String dir = System.getProperty("maven.multiModuleProjectDirectory", ".");
+            File parent = new File(dir).getAbsoluteFile();
             boolean isGit = new File(parent, ".git").exists();
             while (parent.getParentFile() != null && !isGit) {
                 parent = parent.getParentFile();
