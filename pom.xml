@@ -32,7 +32,6 @@
         <module>mvntia-agent</module>
         <module>mvntia-maven-plugin</module>
         <module>mvntia-itests</module>
-        <module>test</module>
     </modules>
 
     <properties>
