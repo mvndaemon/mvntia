@@ -36,6 +36,9 @@ public abstract class AbstractTiaMojo extends AbstractMojo {
     @Parameter(property = "project", readonly = true)
     MavenProject project;
 
+    @Parameter(property = "mvntia.git.notes.ref")
+    String gitNotesRef = GitStorage.GIT_NOTES_REF;
+
     String executionDir;
 
     public final void execute() throws MojoExecutionException, MojoFailureException {
@@ -67,7 +70,7 @@ public abstract class AbstractTiaMojo extends AbstractMojo {
     }
 
     protected Storage createStorage() throws IOException {
-        return new GitStorage(getExecutionDir());
+        return new GitStorage(getExecutionDir(), gitNotesRef);
     }
 
     protected Client createClient() throws IOException {

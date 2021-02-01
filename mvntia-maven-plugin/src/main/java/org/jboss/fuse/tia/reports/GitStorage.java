@@ -38,14 +38,20 @@ import org.slf4j.LoggerFactory;
 
 public class GitStorage implements Storage {
 
+    public static final String GIT_NOTES_REF = "refs/notes/tests";
+
     protected static final Logger LOGGER = LoggerFactory.getLogger(GitStorage.class);
 
-    protected static String GIT_NOTES_REF = "refs/notes/tests";
-
     protected final String executionDir;
+    protected final String gitNotesRef;
 
     public GitStorage(String executionDir) {
+        this(executionDir, GIT_NOTES_REF);
+    }
+
+    public GitStorage(String executionDir, String gitNotesRef) {
         this.executionDir = executionDir;
+        this.gitNotesRef = gitNotesRef;
     }
 
     @Override
@@ -53,7 +59,6 @@ public class GitStorage implements Storage {
         try (Git git = open()) {
             Ref head = getHead(git);
             if (head == null) {
-                LOGGER.info("[mvntia] Can not retrieve HEAD");
                 return null;
             }
 
@@ -70,9 +75,10 @@ public class GitStorage implements Storage {
             RevWalk walk = new RevWalk(git.getRepository());
             RevCommit headCommit = Objects.requireNonNull(walk.parseCommit(head.getObjectId()));
             RevCommit baseCommit = headCommit;
+            int checks = 0;
             while (note == null && baseCommit != null) {
-                LOGGER.info("[mvntia] checking note for " + baseCommit);
-                note = git.notesShow().setNotesRef(GIT_NOTES_REF).setObjectId(baseCommit).call();
+                checks++;
+                note = git.notesShow().setNotesRef(gitNotesRef).setObjectId(baseCommit).call();
                 if (note == null) {
                     RevCommit[] parents = baseCommit.getParents();
                     baseCommit = parents != null && parents.length > 0 ? walk.parseCommit(parents[0]) : null;
@@ -83,7 +89,9 @@ public class GitStorage implements Storage {
                 noteData = new String(git.getRepository().open(note.getData()).getCachedBytes(),
                         StandardCharsets.UTF_8);
             } else {
-                LOGGER.info("[mvntia] not note found");
+                if (checks == 1) {
+                    LOGGER.warn("No history found, make sure to fetch some history");
+                }
             }
             if (baseCommit != null) {
                 modified = new TreeSet<>();
@@ -115,7 +123,7 @@ public class GitStorage implements Storage {
         try (Git git = open()) {
             if (git.status().call().isClean()) {
                 RevCommit commit = getHeadCommit(git);
-                git.notesAdd().setNotesRef(GIT_NOTES_REF)
+                git.notesAdd().setNotesRef(gitNotesRef)
                         .setObjectId(commit)
                         .setMessage(message).call();
                 LOGGER.info("Notes added to commit {}", commit);
@@ -131,7 +139,7 @@ public class GitStorage implements Storage {
     public void removeNotes() throws IOException {
         try (Git git = open()) {
             RevCommit commit = getHeadCommit(git);
-            git.notesRemove().setNotesRef(GIT_NOTES_REF)
+            git.notesRemove().setNotesRef(gitNotesRef)
                     .setObjectId(commit).call();
             LOGGER.info("Notes removed from commit {}", commit);
         } catch (Exception e) {
