@@ -53,6 +53,7 @@ public class GitStorage implements Storage {
         try (Git git = open()) {
             Ref head = getHead(git);
             if (head == null) {
+                LOGGER.info("[mvntia] Can not retrieve HEAD");
                 return null;
             }
 
@@ -70,6 +71,7 @@ public class GitStorage implements Storage {
             RevCommit headCommit = Objects.requireNonNull(walk.parseCommit(head.getObjectId()));
             RevCommit baseCommit = headCommit;
             while (note == null && baseCommit != null) {
+                LOGGER.info("[mvntia] checking note for " + baseCommit);
                 note = git.notesShow().setNotesRef(GIT_NOTES_REF).setObjectId(baseCommit).call();
                 if (note == null) {
                     RevCommit[] parents = baseCommit.getParents();
@@ -80,6 +82,8 @@ public class GitStorage implements Storage {
                 // TODO: use streaming api directly ?
                 noteData = new String(git.getRepository().open(note.getData()).getCachedBytes(),
                         StandardCharsets.UTF_8);
+            } else {
+                LOGGER.info("[mvntia] not note found");
             }
             if (baseCommit != null) {
                 modified = new TreeSet<>();
